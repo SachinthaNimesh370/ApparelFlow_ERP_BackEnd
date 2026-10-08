@@ -1,0 +1,29 @@
+name: Deploy backend
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci && npm test
+
+      - name: Deploy over SSH
+        env:
+          KEY: ${{ secrets.EC2_SSH_KEY }}
+          HOST: ${{ secrets.BACKEND_HOST }}
+        run: |
+          echo "$KEY" > key.pem && chmod 600 key.pem
+          rsync -az --delete -e "ssh -i key.pem -o StrictHostKeyChecking=no" \
+            --exclude node_modules --exclude infra --exclude .git \
+            ./ ec2-user@$HOST:/opt/apparelflow/
+          ssh -i key.pem -o StrictHostKeyChecking=no ec2-user@$HOST \
+            "cd /opt/apparelflow && npm ci --omit=dev && set -a && . /etc/apparelflow.env && set +a && (pm2 restart af --update-env || pm2 start src/server.js --name af) && pm2 save"
