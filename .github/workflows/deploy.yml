@@ -26,4 +26,5 @@ jobs:
             --exclude node_modules --exclude infra --exclude .git \
             ./ ec2-user@$HOST:/opt/apparelflow/
           ssh -i key.pem -o StrictHostKeyChecking=no ec2-user@$HOST \
-            "cd /opt/apparelflow && npm ci --omit=dev && set -a && . /etc/apparelflow.env && set +a && (pm2 restart af --update-env || pm2 start src/server.js --name af) && pm2 save"
+            "cd /opt/apparelflow && npm ci --omit=dev && set -a && . /etc/apparelflow.env && set +a && npm run migrate && (pm2 restart af --update-env || pm2 start src/server.js --name af) && pm2 save"
+
