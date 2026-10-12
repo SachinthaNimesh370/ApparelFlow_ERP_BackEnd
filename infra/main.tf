@@ -190,7 +190,31 @@ resource "aws_instance" "frontend" {
   user_data = <<-EOT
     #!/bin/bash
     dnf install -y nginx
-    mkdir -p /var/www/apparelflow && chown ec2-user /var/www/apparelflow
+    mkdir -p /var/www/apparelflow && chown -R ec2-user:ec2-user /var/www/apparelflow
+    chmod -R 755 /var/www/apparelflow
+    cat > /etc/nginx/nginx.conf << 'CONF'
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log notice;
+pid /run/nginx.pid;
+include /usr/share/nginx/modules/*.conf;
+events {
+    worker_connections 1024;
+}
+http {
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+    access_log  /var/log/nginx/access.log  main;
+    sendfile            on;
+    tcp_nopush          on;
+    keepalive_timeout   65;
+    types_hash_max_size 4096;
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+    include /etc/nginx/conf.d/*.conf;
+}
+CONF
     cat > /etc/nginx/conf.d/apparelflow.conf <<NGINX
     server {
       listen 80 default_server;
