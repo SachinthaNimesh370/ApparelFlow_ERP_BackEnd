@@ -27,7 +27,7 @@ data "aws_ami" "al2023" {
 
 resource "aws_key_pair" "main" {
   key_name   = "apparelflow-key"
-  public_key = file(var.public_key_path)
+  public_key = file(pathexpand(var.public_key_path))
 }
 
 # ---------- Security groups ----------
