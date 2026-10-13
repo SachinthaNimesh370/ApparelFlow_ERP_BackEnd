@@ -53,11 +53,11 @@ resource "aws_security_group" "frontend" {
   }
 
   ingress {
-    description = "SSH"
+    description = "SSH (open for CI/CD GitHub Actions runners)"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.my_ip_cidr]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -86,11 +86,11 @@ resource "aws_security_group" "backend" {
   }
 
   ingress {
-    description = "SSH"
+    description = "SSH (open for CI/CD GitHub Actions runners)"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.my_ip_cidr]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -116,6 +116,14 @@ resource "aws_security_group" "db" {
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.backend.id]
+  }
+
+  ingress {
+    description = "PostgreSQL from developer IP (migrations)"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [var.my_ip_cidr]
   }
 
   tags = {
@@ -162,8 +170,9 @@ resource "aws_instance" "backend" {
     JWT_SECRET=${var.jwt_secret}
     DATABASE_URL=postgres://afadmin:${var.db_password}@${aws_db_instance.pg.address}:5432/apparelflow?sslmode=require
     ENV
+    chown ec2-user:ec2-user /etc/apparelflow.env
     chmod 600 /etc/apparelflow.env
-    mkdir -p /opt/apparelflow && chown ec2-user /opt/apparelflow
+    mkdir -p /opt/apparelflow && chown -R ec2-user:ec2-user /opt/apparelflow
   EOT
 
   tags = {
@@ -181,7 +190,31 @@ resource "aws_instance" "frontend" {
   user_data = <<-EOT
     #!/bin/bash
     dnf install -y nginx
-    mkdir -p /var/www/apparelflow && chown ec2-user /var/www/apparelflow
+    mkdir -p /var/www/apparelflow && chown -R ec2-user:ec2-user /var/www/apparelflow
+    chmod -R 755 /var/www/apparelflow
+    cat > /etc/nginx/nginx.conf << 'CONF'
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log notice;
+pid /run/nginx.pid;
+include /usr/share/nginx/modules/*.conf;
+events {
+    worker_connections 1024;
+}
+http {
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+    access_log  /var/log/nginx/access.log  main;
+    sendfile            on;
+    tcp_nopush          on;
+    keepalive_timeout   65;
+    types_hash_max_size 4096;
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+    include /etc/nginx/conf.d/*.conf;
+}
+CONF
     cat > /etc/nginx/conf.d/apparelflow.conf <<NGINX
     server {
       listen 80 default_server;

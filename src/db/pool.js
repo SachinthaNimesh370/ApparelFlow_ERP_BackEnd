@@ -11,9 +11,10 @@ const connectionString = process.env.DATABASE_URL;
 let poolConfig = {};
 
 if (connectionString) {
-  const needsSsl = connectionString.includes('sslmode=require') || isProduction || process.env.PGSSL === 'true';
+  const needsSsl = connectionString.includes('sslmode=require') || connectionString.includes('sslmode=no-verify') || isProduction || process.env.PGSSL === 'true';
+  const cleanConnectionString = connectionString.replace(/[?&]sslmode=[^&]+/, '');
   poolConfig = {
-    connectionString,
+    connectionString: cleanConnectionString,
     ssl: needsSsl ? { rejectUnauthorized: false } : false
   };
 } else {
